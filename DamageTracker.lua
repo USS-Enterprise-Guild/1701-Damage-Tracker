@@ -142,6 +142,90 @@ local function DateMatches(snapshotDate, inputDate)
 end
 
 ------------------------------------------------------------
+-- NAME RESOLUTION
+------------------------------------------------------------
+
+-- Parse fight identifier: "Lucifron", "Lucifron-2", "Lucifron-Jan-02"
+-- Returns: bossName, snapshot (or nil, errorMessage)
+local function ResolveFightId(fightId)
+    if not fightId or fightId == "" then
+        return nil, "No fight specified"
+    end
+
+    local db = GetCharDB()
+    if not db then
+        return nil, "Database not initialized"
+    end
+
+    -- Try to parse as "BossName-Suffix"
+    local _, _, bossName, suffix = string.find(fightId, "^(.+)-(.+)$")
+
+    if not bossName then
+        -- No suffix - just boss name, get most recent
+        bossName = fightId
+        suffix = nil
+    end
+
+    -- Check if boss exists
+    local bossData = db.bosses[bossName]
+    if not bossData or table.getn(bossData) == 0 then
+        return nil, string.format("No data for boss '%s'", bossName)
+    end
+
+    if not suffix then
+        -- Return most recent
+        return bossName, bossData[1]
+    end
+
+    -- Try suffix as index: "2", "3"
+    local index = tonumber(suffix)
+    if index then
+        if bossData[index] then
+            return bossName, bossData[index]
+        else
+            return nil, string.format("No kill #%d for %s (have %d)", index, bossName, table.getn(bossData))
+        end
+    end
+
+    -- Try suffix as date
+    local targetDate = ParseDateInput(suffix)
+    if targetDate then
+        for i, snapshot in ipairs(bossData) do
+            if DateMatches(snapshot.date, targetDate) then
+                return bossName, snapshot
+            end
+        end
+        return nil, string.format("No %s kill on %s", bossName, FormatDateShort(targetDate))
+    end
+
+    return nil, string.format("Invalid identifier: %s", fightId)
+end
+
+-- Get all boss names with kill counts
+local function GetBossList()
+    local db = GetCharDB()
+    if not db or not db.bosses then return {} end
+
+    local list = {}
+    for bossName, kills in pairs(db.bosses) do
+        table.insert(list, {
+            name = bossName,
+            count = table.getn(kills),
+            latest = kills[1],
+        })
+    end
+
+    -- Sort by most recent kill
+    table.sort(list, function(a, b)
+        if not a.latest then return false end
+        if not b.latest then return true end
+        return (a.latest.timestamp or 0) > (b.latest.timestamp or 0)
+    end)
+
+    return list
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
