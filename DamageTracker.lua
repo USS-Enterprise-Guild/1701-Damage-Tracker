@@ -471,6 +471,72 @@ local function ScheduleSegmentCheck()
 end
 
 ------------------------------------------------------------
+-- STAT CALCULATIONS
+------------------------------------------------------------
+
+local function CalcHitRate(hits, crits, misses)
+    local total = hits + crits + misses
+    if total == 0 then return 0 end
+    return ((hits + crits) / total) * 100
+end
+
+local function CalcCritRate(hits, crits)
+    local total = hits + crits
+    if total == 0 then return 0 end
+    return (crits / total) * 100
+end
+
+-- Calculate aggregate stats from a snapshot
+local function CalcSnapshotStats(snapshot)
+    local totalHits = 0
+    local totalCrits = 0
+    local totalMisses = 0
+    local totalResists = 0
+    local totalResistedDamage = 0
+
+    if snapshot.abilities then
+        for _, ability in pairs(snapshot.abilities) do
+            totalHits = totalHits + (ability.hits or 0)
+            totalCrits = totalCrits + (ability.crits or 0)
+            totalMisses = totalMisses + (ability.misses or 0) +
+                         (ability.parry or 0) + (ability.dodge or 0) + (ability.block or 0)
+            totalResists = totalResists + (ability.resists or 0)
+            totalResistedDamage = totalResistedDamage + (ability.resistedDamage or 0)
+        end
+    end
+
+    return {
+        hitRate = CalcHitRate(totalHits, totalCrits, totalMisses + totalResists),
+        critRate = CalcCritRate(totalHits, totalCrits),
+        totalResists = totalResists,
+        partialResists = snapshot.partialResists or 0,
+        resistedDamage = totalResistedDamage,
+    }
+end
+
+-- Format percentage difference with color
+local function FormatDiff(old, new, format, isLowerBetter)
+    if not old or not new then return "?" end
+    local diff = new - old
+    local pct = 0
+    if old ~= 0 then
+        pct = (diff / math.abs(old)) * 100
+    end
+
+    local color
+    if diff == 0 then
+        color = "|cFFFFFFFF"  -- White
+    elseif (diff > 0 and not isLowerBetter) or (diff < 0 and isLowerBetter) then
+        color = "|cFF00FF00"  -- Green (improvement)
+    else
+        color = "|cFFFF0000"  -- Red (regression)
+    end
+
+    local sign = diff >= 0 and "+" or ""
+    return string.format(format .. " (%s%s%.1f%%|r)", new, color, sign, pct)
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
