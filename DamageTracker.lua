@@ -739,6 +739,81 @@ local function CompareFights(fightId1, fightId2, showSpells)
     end
 end
 
+-- /dt delete <fight> - Delete a specific snapshot
+local function DeleteFight(fightId)
+    local bossName, snapshot = ResolveFightId(fightId)
+    if not bossName then
+        MsgError(snapshot)
+        return
+    end
+
+    local db = GetCharDB()
+    local bossData = db.bosses[bossName]
+
+    -- Find and remove the snapshot
+    for i, s in ipairs(bossData) do
+        if s == snapshot then
+            table.remove(bossData, i)
+            Msg(string.format("Deleted %s kill from %s", bossName, FormatDateShort(snapshot.date)))
+
+            -- Remove boss entry if no kills left
+            if table.getn(bossData) == 0 then
+                db.bosses[bossName] = nil
+            end
+            return
+        end
+    end
+
+    MsgError("Could not find snapshot to delete")
+end
+
+-- /dt config keepcount N - Set retention count
+local function SetConfig(key, value)
+    local db = GetCharDB()
+    if not db then
+        MsgError("Database not initialized")
+        return
+    end
+
+    if key == "keepcount" then
+        local count = tonumber(value)
+        if not count or count < 1 then
+            MsgError("keepcount must be a positive number")
+            return
+        end
+        db.config.keepCount = count
+        Msg(string.format("Now keeping %d kills per boss", count))
+
+        -- Prune existing data if needed
+        for bossName, kills in pairs(db.bosses) do
+            while table.getn(kills) > count do
+                table.remove(kills)
+            end
+        end
+    else
+        MsgError(string.format("Unknown config key: %s", key))
+        Msg("Available: keepcount")
+    end
+end
+
+-- /dt help - Show commands
+local function ShowHelp()
+    Msg("=== DamageTracker Commands ===")
+    Msg("/dt - Show boss history summary")
+    Msg("/dt list - List all stored boss fights")
+    Msg("/dt show <fight> - Show detailed stats")
+    Msg("/dt compare <a> <b> - Compare two fights")
+    Msg("/dt compare <a> <b> spells - Compare per-ability")
+    Msg("/dt delete <fight> - Delete a snapshot")
+    Msg("/dt config keepcount N - Set retention (default 3)")
+    Msg("")
+    Msg("Fight identifiers:")
+    Msg("  Lucifron - Most recent kill")
+    Msg("  Lucifron-2 - Second most recent")
+    Msg("  Lucifron-Jan-02 - By date")
+    Msg("  Lucifron-2025-01-02 - Full date")
+end
+
 ------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
