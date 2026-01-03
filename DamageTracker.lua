@@ -878,7 +878,45 @@ frame:SetScript("OnEvent", function()
         SLASH_DAMAGETRACKER17011 = "/dt"
         SLASH_DAMAGETRACKER17012 = "/damagetracker"
         SlashCmdList["DAMAGETRACKER1701"] = function(msg)
-            Msg("Commands not yet implemented. Check back soon!")
+            msg = msg or ""
+            msg = string.gsub(msg, "^%s*(.-)%s*$", "%1")  -- trim
+
+            -- Parse command and arguments
+            local _, _, cmd, args = string.find(msg, "^(%S+)%s*(.*)")
+            cmd = string.lower(cmd or "")
+            args = args or ""
+
+            if cmd == "" then
+                ShowSummary()
+            elseif cmd == "list" then
+                ShowList()
+            elseif cmd == "show" then
+                ShowFight(args)
+            elseif cmd == "compare" or cmd == "cmp" then
+                -- Parse: <fight1> <fight2> [spells]
+                local _, _, fight1, fight2, extra = string.find(args, "^(%S+)%s+(%S+)%s*(.*)")
+                if not fight1 or not fight2 then
+                    MsgError("Usage: /dt compare <fight1> <fight2> [spells]")
+                    return
+                end
+                local showSpells = string.lower(extra or "") == "spells"
+                CompareFights(fight1, fight2, showSpells)
+            elseif cmd == "delete" or cmd == "remove" then
+                DeleteFight(args)
+            elseif cmd == "config" then
+                local _, _, key, value = string.find(args, "^(%S+)%s+(%S+)")
+                if not key then
+                    Msg("Current config:")
+                    Msg(string.format("  keepcount = %d", GetKeepCount()))
+                else
+                    SetConfig(string.lower(key), value)
+                end
+            elseif cmd == "help" then
+                ShowHelp()
+            else
+                MsgError(string.format("Unknown command: %s", cmd))
+                Msg("Type /dt help for usage.")
+            end
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Combat ended - check for new DPSMate segments after delay
