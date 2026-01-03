@@ -400,6 +400,77 @@ local function GetSegmentName(index)
 end
 
 ------------------------------------------------------------
+-- AUTO-CAPTURE
+------------------------------------------------------------
+
+-- Save a snapshot for a boss
+local function SaveBossSnapshot(bossName, snapshot)
+    local db = GetCharDB()
+    if not db then return false end
+
+    if not db.bosses[bossName] then
+        db.bosses[bossName] = {}
+    end
+
+    -- Insert at beginning (newest first)
+    table.insert(db.bosses[bossName], 1, snapshot)
+
+    -- Prune old snapshots
+    local keepCount = GetKeepCount()
+    while table.getn(db.bosses[bossName]) > keepCount do
+        table.remove(db.bosses[bossName])
+    end
+
+    return true
+end
+
+-- Check for new DPSMate segments and capture them
+local function CheckForNewSegments()
+    if dpsMateMissing then return end
+
+    local currentCount = GetDPSMateSegmentCount()
+
+    if currentCount > lastSegmentCount then
+        -- New segment(s) detected
+        for i = lastSegmentCount + 1, currentCount do
+            local bossName = GetSegmentName(i)
+            if bossName and bossName ~= "" then
+                local snapshot = ExtractSegmentData(i)
+                if snapshot and snapshot.totalDamage > 0 then
+                    if SaveBossSnapshot(bossName, snapshot) then
+                        Msg(string.format("Captured |cFFFFFF00%s|r kill: %.1f DPS, %s damage",
+                            bossName, snapshot.dps, FormatNumber(snapshot.totalDamage)))
+                    end
+                end
+            end
+        end
+    end
+
+    lastSegmentCount = currentCount
+end
+
+-- Timer frame for delayed segment check
+local timerFrame = CreateFrame("Frame")
+local pendingCheck = false
+local checkDelay = 0
+
+timerFrame:SetScript("OnUpdate", function()
+    if pendingCheck then
+        checkDelay = checkDelay - arg1
+        if checkDelay <= 0 then
+            pendingCheck = false
+            CheckForNewSegments()
+        end
+    end
+end)
+
+-- Schedule a segment check after delay
+local function ScheduleSegmentCheck()
+    pendingCheck = true
+    checkDelay = 3  -- 3 second delay for DPSMate to finalize
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
@@ -442,6 +513,7 @@ end
 -- Create addon frame
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("VARIABLES_LOADED")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 frame:SetScript("OnEvent", function()
     if event == "VARIABLES_LOADED" then
@@ -458,6 +530,8 @@ frame:SetScript("OnEvent", function()
             MsgError("Install DPSMate to use this addon.")
         else
             Msg("Loaded. Type /dt for boss history, /dt help for commands.")
+            -- Initialize segment count
+            lastSegmentCount = GetDPSMateSegmentCount()
         end
 
         -- Register slash commands
@@ -465,6 +539,11 @@ frame:SetScript("OnEvent", function()
         SLASH_DAMAGETRACKER17012 = "/damagetracker"
         SlashCmdList["DAMAGETRACKER1701"] = function(msg)
             Msg("Commands not yet implemented. Check back soon!")
+        end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Combat ended - check for new DPSMate segments after delay
+        if not dpsMateMissing then
+            ScheduleSegmentCheck()
         end
     end
 end)
