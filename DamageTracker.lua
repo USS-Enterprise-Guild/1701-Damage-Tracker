@@ -283,7 +283,32 @@ local function ParseMeleeMiss(msg)
 end
 
 local function ParseSpellDamage(msg)
-    local _, _, spell, target, damage, resisted = string.find(msg, "Your (.+) hits (.+) for (%d+)%.%s*%((%d+) resisted%)")
+    local spell, target, damage, resisted
+
+    -- Pattern with school damage and partial resist: "Your Frostbolt hits Target for 500 Frost damage. (100 resisted)"
+    _, _, spell, target, damage, resisted = string.find(msg, "Your (.+) hits (.+) for (%d+) %a+ damage%.%s*%((%d+) resisted%)")
+    if spell then
+        return spell, tonumber(damage), false, tonumber(resisted)
+    end
+
+    _, _, spell, target, damage, resisted = string.find(msg, "Your (.+) crits (.+) for (%d+) %a+ damage%.%s*%((%d+) resisted%)")
+    if spell then
+        return spell, tonumber(damage), true, tonumber(resisted)
+    end
+
+    -- Pattern with school damage: "Your Frostbolt hits Target for 500 Frost damage."
+    _, _, spell, target, damage = string.find(msg, "Your (.+) hits (.+) for (%d+) %a+ damage%.")
+    if spell then
+        return spell, tonumber(damage), false, 0
+    end
+
+    _, _, spell, target, damage = string.find(msg, "Your (.+) crits (.+) for (%d+) %a+ damage%.")
+    if spell then
+        return spell, tonumber(damage), true, 0
+    end
+
+    -- Fallback patterns without school (for physical/non-school spells)
+    _, _, spell, target, damage, resisted = string.find(msg, "Your (.+) hits (.+) for (%d+)%.%s*%((%d+) resisted%)")
     if spell then
         return spell, tonumber(damage), false, tonumber(resisted)
     end
