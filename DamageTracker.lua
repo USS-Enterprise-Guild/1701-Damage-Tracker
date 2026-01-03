@@ -226,6 +226,180 @@ local function GetBossList()
 end
 
 ------------------------------------------------------------
+-- DPSMATE DATA READER
+------------------------------------------------------------
+
+-- DPSMate array indices (from DPSMate_Details_Damage.lua)
+local DPM = {
+    HITS = 1,
+    HIT_MIN = 2,
+    HIT_MAX = 3,
+    HIT_AVG = 4,
+    CRITS = 5,
+    CRIT_MIN = 6,
+    CRIT_MAX = 7,
+    CRIT_AVG = 8,
+    MISS = 9,
+    PARRY = 10,
+    DODGE = 11,
+    RESIST = 12,
+    TOTAL_DAMAGE = 13,
+    GLANCE = 14,
+    GLANCE_MIN = 15,
+    GLANCE_MAX = 16,
+    GLANCE_AVG = 17,
+    BLOCK = 18,
+    BLOCK_MIN = 19,
+    BLOCK_MAX = 20,
+    BLOCK_AVG = 21,
+}
+
+-- Get player's user ID in DPSMate
+local function GetPlayerDPSMateId()
+    if not DPSMateUser then return nil end
+    local playerName = UnitName("player")
+    local userData = DPSMateUser[playerName]
+    if userData then
+        return userData[1]  -- First element is the user ID
+    end
+    return nil
+end
+
+-- Get ability name by DPSMate ability ID
+local function GetAbilityName(abilityId)
+    if not DPSMateAbility then return "Unknown" end
+    for name, data in pairs(DPSMateAbility) do
+        if data[1] == abilityId then
+            return name
+        end
+    end
+    return "Unknown-" .. tostring(abilityId)
+end
+
+-- Extract player's data from a DPSMate segment
+-- segmentIndex: which segment in DPSMateHistory to read
+-- Returns: snapshot table or nil
+local function ExtractSegmentData(segmentIndex)
+    if dpsMateMissing then return nil end
+
+    local playerId = GetPlayerDPSMateId()
+    if not playerId then
+        return nil
+    end
+
+    -- Get the damage data for this segment
+    -- DPSMateHistory stores historical data, indexed by module name
+    local histDamage = DPSMateHistory and DPSMateHistory["Damage"]
+    if not histDamage or not histDamage[segmentIndex] then
+        return nil
+    end
+
+    local segmentData = histDamage[segmentIndex]
+    local playerData = segmentData[playerId]
+    if not playerData then
+        return nil
+    end
+
+    -- Get combat time for this segment
+    local combatTime = 0
+    if DPSMateCombatTime and DPSMateCombatTime["segments"] then
+        local segTime = DPSMateCombatTime["segments"][segmentIndex]
+        if segTime then
+            combatTime = segTime[1] or 0
+        end
+    end
+
+    -- Build abilities table
+    local abilities = {}
+    local totalDamage = 0
+    local totalHits = 0
+    local totalCrits = 0
+    local totalMisses = 0
+    local totalResists = 0
+    local totalResistedDamage = 0
+
+    for abilityId, abilityData in pairs(playerData) do
+        if abilityId ~= "i" and type(abilityData) == "table" then
+            local abilityName = GetAbilityName(abilityId)
+            local hits = abilityData[DPM.HITS] or 0
+            local crits = abilityData[DPM.CRITS] or 0
+            local misses = abilityData[DPM.MISS] or 0
+            local resists = abilityData[DPM.RESIST] or 0
+            local damage = abilityData[DPM.TOTAL_DAMAGE] or 0
+            local parry = abilityData[DPM.PARRY] or 0
+            local dodge = abilityData[DPM.DODGE] or 0
+            local glance = abilityData[DPM.GLANCE] or 0
+            local block = abilityData[DPM.BLOCK] or 0
+
+            -- DPSMate doesn't track partial resists separately in this structure
+            -- We'll estimate resisted damage as 0 for now (would need more parsing)
+            local resistedDamage = 0
+
+            abilities[abilityName] = {
+                damage = damage,
+                hits = hits,
+                crits = crits,
+                misses = misses,
+                resists = resists,
+                partialResists = 0,  -- Not directly available
+                resistedDamage = resistedDamage,
+                parry = parry,
+                dodge = dodge,
+                glance = glance,
+                block = block,
+                hitMin = abilityData[DPM.HIT_MIN] or 0,
+                hitMax = abilityData[DPM.HIT_MAX] or 0,
+                hitAvg = abilityData[DPM.HIT_AVG] or 0,
+                critMin = abilityData[DPM.CRIT_MIN] or 0,
+                critMax = abilityData[DPM.CRIT_MAX] or 0,
+                critAvg = abilityData[DPM.CRIT_AVG] or 0,
+            }
+
+            totalDamage = totalDamage + damage
+            totalHits = totalHits + hits
+            totalCrits = totalCrits + crits
+            totalMisses = totalMisses + misses + parry + dodge + block
+            totalResists = totalResists + resists
+        end
+    end
+
+    local dps = 0
+    if combatTime > 0 then
+        dps = totalDamage / combatTime
+    end
+
+    return {
+        date = GetCurrentDate(),
+        timestamp = time(),
+        combatTime = combatTime,
+        totalDamage = totalDamage,
+        dps = dps,
+        totalHits = totalHits,
+        totalCrits = totalCrits,
+        totalMisses = totalMisses,
+        totalResists = totalResists,
+        totalResistedDamage = totalResistedDamage,
+        abilities = abilities,
+    }
+end
+
+-- Get count of segments in DPSMateHistory
+local function GetDPSMateSegmentCount()
+    if not DPSMateHistory or not DPSMateHistory["names"] then
+        return 0
+    end
+    return table.getn(DPSMateHistory["names"])
+end
+
+-- Get segment name (boss name) by index
+local function GetSegmentName(index)
+    if not DPSMateHistory or not DPSMateHistory["names"] then
+        return nil
+    end
+    return DPSMateHistory["names"][index]
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
