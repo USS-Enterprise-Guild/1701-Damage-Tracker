@@ -603,8 +603,8 @@ end
 -- /dt show <fight> - Show detailed stats for a fight
 local function ShowFight(fightId)
     local bossName, snapshot = ResolveFightId(fightId)
-    if not snapshot then
-        MsgError(bossName)  -- bossName contains error message
+    if not bossName then
+        MsgError(snapshot)  -- snapshot contains error message on failure
         return
     end
 
