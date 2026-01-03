@@ -644,6 +644,101 @@ local function ShowFight(fightId)
     end
 end
 
+-- /dt compare <a> <b> - Compare two fights
+local function CompareFights(fightId1, fightId2, showSpells)
+    local boss1, snap1 = ResolveFightId(fightId1)
+    if not boss1 then
+        MsgError(snap1)
+        return
+    end
+
+    local boss2, snap2 = ResolveFightId(fightId2)
+    if not boss2 then
+        MsgError(snap2)
+        return
+    end
+
+    local stats1 = CalcSnapshotStats(snap1)
+    local stats2 = CalcSnapshotStats(snap2)
+
+    Msg(string.format("=== %s: %s vs %s ===",
+        boss1, FormatDateShort(snap1.date), FormatDateShort(snap2.date)))
+
+    -- DPS comparison
+    Msg(string.format("DPS:        %s",
+        FormatDiff(snap1.dps, snap2.dps, "%.1f")))
+    Msg(string.format("Damage:     %s",
+        FormatDiff(snap1.totalDamage, snap2.totalDamage, "%.0f")))
+    Msg(string.format("Combat Time: %.1fs vs %.1fs",
+        snap1.combatTime or 0, snap2.combatTime or 0))
+    Msg("")
+    Msg(string.format("Hit Rate:   %.1f%% vs %.1f%%  (%s%.1f%%|r)",
+        stats1.hitRate, stats2.hitRate,
+        stats2.hitRate >= stats1.hitRate and "|cFF00FF00+" or "|cFFFF0000",
+        stats2.hitRate - stats1.hitRate))
+    Msg(string.format("Crit Rate:  %.1f%% vs %.1f%%  (%s%.1f%%|r)",
+        stats1.critRate, stats2.critRate,
+        stats2.critRate >= stats1.critRate and "|cFF00FF00+" or "|cFFFF0000",
+        stats2.critRate - stats1.critRate))
+    Msg(string.format("Resists:    %d vs %d",
+        stats1.totalResists, stats2.totalResists))
+    Msg(string.format("Dmg Lost:   %s",
+        FormatDiff(stats1.resistedDamage, stats2.resistedDamage, "%.0f", true)))
+
+    -- Per-ability breakdown if requested
+    if showSpells then
+        Msg("")
+        Msg("=== Per-Ability Breakdown ===")
+
+        -- Collect all ability names
+        local allAbilities = {}
+        if snap1.abilities then
+            for name, _ in pairs(snap1.abilities) do
+                allAbilities[name] = true
+            end
+        end
+        if snap2.abilities then
+            for name, _ in pairs(snap2.abilities) do
+                allAbilities[name] = true
+            end
+        end
+
+        -- Sort by snap2 damage (or snap1 if not in snap2)
+        local sorted = {}
+        for name, _ in pairs(allAbilities) do
+            local dmg2 = snap2.abilities and snap2.abilities[name] and snap2.abilities[name].damage or 0
+            local dmg1 = snap1.abilities and snap1.abilities[name] and snap1.abilities[name].damage or 0
+            table.insert(sorted, {name = name, damage = dmg2 > 0 and dmg2 or dmg1})
+        end
+        table.sort(sorted, function(a, b) return a.damage > b.damage end)
+
+        for _, entry in ipairs(sorted) do
+            local name = entry.name
+            local a1 = snap1.abilities and snap1.abilities[name] or {}
+            local a2 = snap2.abilities and snap2.abilities[name] or {}
+
+            local hit1 = CalcHitRate(a1.hits or 0, a1.crits or 0, (a1.misses or 0) + (a1.resists or 0))
+            local hit2 = CalcHitRate(a2.hits or 0, a2.crits or 0, (a2.misses or 0) + (a2.resists or 0))
+            local crit1 = CalcCritRate(a1.hits or 0, a1.crits or 0)
+            local crit2 = CalcCritRate(a2.hits or 0, a2.crits or 0)
+            local dmgLost1 = a1.resistedDamage or 0
+            local dmgLost2 = a2.resistedDamage or 0
+
+            -- Calculate ability DPS
+            local dps1 = snap1.combatTime and snap1.combatTime > 0 and (a1.damage or 0) / snap1.combatTime or 0
+            local dps2 = snap2.combatTime and snap2.combatTime > 0 and (a2.damage or 0) / snap2.combatTime or 0
+
+            Msg(string.format("|cFFFFFF00%s|r:", name))
+            Msg(string.format("  DPS:      %s", FormatDiff(dps1, dps2, "%.1f")))
+            Msg(string.format("  Hit%%:     %.1f%% vs %.1f%%", hit1, hit2))
+            Msg(string.format("  Crit%%:    %.1f%% vs %.1f%%", crit1, crit2))
+            if dmgLost1 > 0 or dmgLost2 > 0 then
+                Msg(string.format("  Dmg Lost: %s", FormatDiff(dmgLost1, dmgLost2, "%.0f", true)))
+            end
+        end
+    end
+end
+
 ------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
