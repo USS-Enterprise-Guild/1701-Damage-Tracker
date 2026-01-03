@@ -537,6 +537,114 @@ local function FormatDiff(old, new, format, isLowerBetter)
 end
 
 ------------------------------------------------------------
+-- DISPLAY COMMANDS
+------------------------------------------------------------
+
+-- /dt - Show boss history summary
+local function ShowSummary()
+    local bossList = GetBossList()
+
+    if table.getn(bossList) == 0 then
+        Msg("No boss kills recorded yet.")
+        Msg("Kill a boss with DPSMate running to start tracking!")
+        return
+    end
+
+    Msg("=== DamageTracker Boss History ===")
+
+    for _, boss in ipairs(bossList) do
+        local latest = boss.latest
+        local dpsStr = string.format("%.0f DPS", latest.dps or 0)
+
+        -- Calculate diff from previous if exists
+        local db = GetCharDB()
+        local bossData = db.bosses[boss.name]
+        if bossData and bossData[2] then
+            local prevDps = bossData[2].dps or 0
+            if prevDps > 0 then
+                local diff = ((latest.dps - prevDps) / prevDps) * 100
+                local color = diff >= 0 and "|cFF00FF00+" or "|cFFFF0000"
+                dpsStr = string.format("%.0f DPS (%s%.1f%%|r)", latest.dps, color, diff)
+            end
+        end
+
+        Msg(string.format("|cFFFFFF00%s|r: %d kills (latest: %s, %s)",
+            boss.name, boss.count, FormatDateShort(latest.date), dpsStr))
+    end
+end
+
+-- /dt list - List all stored boss fights
+local function ShowList()
+    local db = GetCharDB()
+    if not db or not db.bosses then
+        Msg("No data available.")
+        return
+    end
+
+    local hasData = false
+
+    Msg("=== All Stored Boss Fights ===")
+
+    for bossName, kills in pairs(db.bosses) do
+        hasData = true
+        Msg(string.format("|cFFFFFF00%s|r:", bossName))
+        for i, snapshot in ipairs(kills) do
+            Msg(string.format("  %d. %s - %.0f DPS, %s, %s combat",
+                i, FormatDateShort(snapshot.date), snapshot.dps or 0,
+                FormatNumber(snapshot.totalDamage), FormatTime(snapshot.combatTime)))
+        end
+    end
+
+    if not hasData then
+        Msg("No boss kills recorded yet.")
+    end
+end
+
+-- /dt show <fight> - Show detailed stats for a fight
+local function ShowFight(fightId)
+    local bossName, snapshot = ResolveFightId(fightId)
+    if not snapshot then
+        MsgError(bossName)  -- bossName contains error message
+        return
+    end
+
+    local stats = CalcSnapshotStats(snapshot)
+
+    Msg(string.format("=== %s: %s ===", bossName, FormatDateShort(snapshot.date)))
+    Msg(string.format("DPS: |cFFFFFF00%.1f|r | Damage: |cFFFFFF00%s|r",
+        snapshot.dps or 0, FormatNumber(snapshot.totalDamage)))
+    Msg(string.format("Combat Time: %s", FormatTime(snapshot.combatTime)))
+    Msg(string.format("Hit Rate: %.1f%% | Crit Rate: %.1f%%",
+        stats.hitRate, stats.critRate))
+
+    if stats.totalResists > 0 or stats.resistedDamage > 0 then
+        Msg(string.format("Resists: %d | Dmg Lost: %s",
+            stats.totalResists, FormatNumber(stats.resistedDamage)))
+    end
+
+    -- Show top abilities
+    if snapshot.abilities then
+        Msg("--- Top Abilities ---")
+        local sorted = {}
+        for name, data in pairs(snapshot.abilities) do
+            table.insert(sorted, {name = name, damage = data.damage or 0, data = data})
+        end
+        table.sort(sorted, function(a, b) return a.damage > b.damage end)
+
+        local shown = 0
+        for _, ability in ipairs(sorted) do
+            if shown >= 5 then break end
+            shown = shown + 1
+            local a = ability.data
+            local hitRate = CalcHitRate(a.hits or 0, a.crits or 0, (a.misses or 0) + (a.resists or 0))
+            local critRate = CalcCritRate(a.hits or 0, a.crits or 0)
+            Msg(string.format("  |cFFFFFF00%s|r: %s (%.1f%% hit, %.1f%% crit)",
+                ability.name, FormatNumber(ability.damage), hitRate, critRate))
+        end
+    end
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
@@ -571,10 +679,6 @@ local function GetKeepCount()
     local db = GetCharDB()
     return db and db.config and db.config.keepCount or 3
 end
-
-------------------------------------------------------------
--- PLACEHOLDER: More code to follow in subsequent tasks
-------------------------------------------------------------
 
 -- Create addon frame
 local frame = CreateFrame("Frame")
