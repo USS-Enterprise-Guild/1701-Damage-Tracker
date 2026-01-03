@@ -107,6 +107,41 @@ local function DeepCopy(orig)
 end
 
 ------------------------------------------------------------
+-- DATE PARSING
+------------------------------------------------------------
+
+-- Parse flexible date input: "Jan-02", "january-02", "2025-01-02"
+-- Returns "YYYY-MM-DD" string or nil
+local function ParseDateInput(input)
+    if not input then return nil end
+
+    -- Try ISO format: YYYY-MM-DD
+    local _, _, year, month, day = string.find(input, "^(%d%d%d%d)-(%d%d?)-(%d%d?)$")
+    if year then
+        return string.format("%04d-%02d-%02d", tonumber(year), tonumber(month), tonumber(day))
+    end
+
+    -- Try month-day format: Jan-02, january-02, JANUARY-02
+    local _, _, monthStr, dayStr = string.find(input, "^(%a+)-(%d%d?)$")
+    if monthStr then
+        local monthNum = MONTH_MAP[string.lower(monthStr)]
+        if monthNum then
+            -- Assume current year
+            local currentYear = tonumber(date("%Y"))
+            return string.format("%04d-%02d-%02d", currentYear, monthNum, tonumber(dayStr))
+        end
+    end
+
+    return nil
+end
+
+-- Check if a date string matches a snapshot's date
+local function DateMatches(snapshotDate, inputDate)
+    if not snapshotDate or not inputDate then return false end
+    return snapshotDate == inputDate
+end
+
+------------------------------------------------------------
 -- DATABASE
 ------------------------------------------------------------
 
