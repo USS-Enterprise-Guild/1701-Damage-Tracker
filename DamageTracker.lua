@@ -925,3 +925,11 @@ frame:SetScript("OnEvent", function()
         end
     end
 end)
+
+------------------------------------------------------------
+-- EXPORTS
+------------------------------------------------------------
+
+DamageTracker1701.GetDB = GetCharDB
+DamageTracker1701.ResolveFightId = ResolveFightId
+DamageTracker1701.CheckForNewSegments = CheckForNewSegments
