@@ -1,8 +1,9 @@
 ## Interface: 11200
 ## Title: 1701 Addons - DamageTracker
-## Notes: Tracks damage, hits, misses, and resists for gear comparison
+## Notes: DPSMate companion - stores boss fight history for cross-session comparison
 ## Author: Claude
-## Version: 1.1.0
+## Version: 2.0.0
+## Dependencies: DPSMate
 ## SavedVariables: DamageTrackerDB
 
 DamageTracker.lua
