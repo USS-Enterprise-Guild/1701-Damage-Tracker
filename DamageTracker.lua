@@ -107,6 +107,42 @@ local function DeepCopy(orig)
 end
 
 ------------------------------------------------------------
+-- DATABASE
+------------------------------------------------------------
+
+local function InitDB()
+    if not DamageTrackerDB then
+        DamageTrackerDB = {}
+    end
+
+    if not DamageTrackerDB[charKey] then
+        DamageTrackerDB[charKey] = {
+            config = {
+                keepCount = 3,
+            },
+            bosses = {},
+        }
+    end
+
+    -- Migration: ensure config exists
+    if not DamageTrackerDB[charKey].config then
+        DamageTrackerDB[charKey].config = { keepCount = 3 }
+    end
+    if not DamageTrackerDB[charKey].bosses then
+        DamageTrackerDB[charKey].bosses = {}
+    end
+end
+
+local function GetCharDB()
+    return DamageTrackerDB and DamageTrackerDB[charKey]
+end
+
+local function GetKeepCount()
+    local db = GetCharDB()
+    return db and db.config and db.config.keepCount or 3
+end
+
+------------------------------------------------------------
 -- DATE PARSING
 ------------------------------------------------------------
 
@@ -815,40 +851,8 @@ local function ShowHelp()
 end
 
 ------------------------------------------------------------
--- DATABASE
+-- EVENT HANDLING
 ------------------------------------------------------------
-
-local function InitDB()
-    if not DamageTrackerDB then
-        DamageTrackerDB = {}
-    end
-
-    if not DamageTrackerDB[charKey] then
-        DamageTrackerDB[charKey] = {
-            config = {
-                keepCount = 3,
-            },
-            bosses = {},
-        }
-    end
-
-    -- Migration: ensure config exists
-    if not DamageTrackerDB[charKey].config then
-        DamageTrackerDB[charKey].config = { keepCount = 3 }
-    end
-    if not DamageTrackerDB[charKey].bosses then
-        DamageTrackerDB[charKey].bosses = {}
-    end
-end
-
-local function GetCharDB()
-    return DamageTrackerDB and DamageTrackerDB[charKey]
-end
-
-local function GetKeepCount()
-    local db = GetCharDB()
-    return db and db.config and db.config.keepCount or 3
-end
 
 -- Create addon frame
 local frame = CreateFrame("Frame")
