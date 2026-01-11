@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: 1701 Addons - DamageTracker
 ## Notes: DPSMate companion - stores boss fight history for cross-session comparison
-## Author: Claude
+## Author: Kilaire
 ## Version: 2.0.1
 ## Dependencies: DPSMate
 ## SavedVariables: DamageTrackerDB
